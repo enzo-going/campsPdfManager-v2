@@ -16,8 +16,10 @@ export class FASE1MetadataForm {
             equipment_info: 'equipment_info',
             company_name: 'company_name',
             company_cnpj: 'company_cnpj',
-            document_type: 'document_type',
-            document_category: 'document_category'
+            document_type: 'upload_document_type',
+            document_category: 'document_category',
+            author: 'author',
+            subject: 'subject'
         };
         this.isLoaded = false;
     }

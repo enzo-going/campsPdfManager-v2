@@ -121,7 +121,7 @@ export class DocumentsModule {
                     <br><small>${doc.original_filename}</small>
                 </td>
                 <td>${doc.author || '-'}</td>
-                <td style="text-transform: capitalize;">${doc.doc_type || '-'}</td>
+                <td style="text-transform: capitalize;">${doc.document_type || '-'}</td>
                 <td>${doc.document_category || '-'}</td>
                 <td>${formatFileSize(doc.file_size)}</td>
                 <td>
@@ -244,8 +244,15 @@ export class DocumentsModule {
      */
     async viewDocument(docId) {
         try {
-            const doc = this.documents.find(d => d.id === docId);
-            if (!doc) return;
+            // Fetch fresh document data from API to ensure we have the latest
+            const response = await this.api.get(`${ROUTES.DOCUMENTS.DETAIL}/${docId}`);
+            // Backend returns { success: true, data: { ...document fields } }
+            const doc = response.data;
+            if (!doc) {
+                showToast('Documento não encontrado', 'error');
+                return;
+            }
+            console.log('📄 Document data for details:', doc);
 
             // Populate modal
             document.getElementById('viewDocTitle').textContent = doc.title || doc.original_filename;
@@ -306,7 +313,7 @@ export class DocumentsModule {
                     </div>
                     <div class="detail-group">
                         <label>Tipo Documental</label>
-                        <span>${doc.doc_type || '-'}</span>
+                        <span>${doc.document_type || '-'}</span>
                     </div>
                 </div>
             `;
@@ -357,7 +364,7 @@ export class DocumentsModule {
                     </div>
                     <div class="detail-group">
                         <label>Tipo Documental</label>
-                        <span>${doc.doc_type || '-'}</span>
+                        <span>${doc.document_type || '-'}</span>
                     </div>
                 </div>
             `;

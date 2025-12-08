@@ -163,6 +163,11 @@ def upload_documents():
     company_cnpj = request.form.get('company_cnpj', '')
     document_type = request.form.get('document_type', 'Contrato de Aprendizagem')
     document_category = request.form.get('document_category', 'Trabalhista')
+    author = request.form.get('author', '')
+    subject = request.form.get('subject', '')
+    
+    # DEBUG: Log received values
+    print(f"📤 Backend received: document_type='{document_type}', author='{author}', subject='{subject}'")
     
     # ✅ FASE 1: Validar CPF/CNPJ
     is_valid_cpf, cpf_message = validate_cpf_cnpj(digitizer_cpf_cnpj)
@@ -283,7 +288,10 @@ def upload_documents():
                 company_cnpj=company_cnpj,
                 # ✅ FASE 1: Classificação
                 document_type=document_type,
-                document_category=document_category
+                document_category=document_category,
+                # ✅ FASE 1: Metadados descritivos
+                author=author,
+                subject=subject
             )
             
             db.session.add(document)

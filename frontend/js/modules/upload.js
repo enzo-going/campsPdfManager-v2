@@ -204,6 +204,7 @@ export class UploadModule {
 
             // Add FASE 1 metadata
             const metadata = this.metadataForm.getData();
+            console.log('📤 FASE 1 Metadata being sent:', metadata);
             for (const [key, value] of Object.entries(metadata)) {
                 formData.append(key, value);
             }

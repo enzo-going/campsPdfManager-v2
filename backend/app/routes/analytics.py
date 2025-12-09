@@ -158,18 +158,18 @@ def documents_by_type():
     """Gráfico de documentos por tipo"""
     try:
         results = db.session.query(
-            Document.doc_type,
+            Document.document_type,
             func.count(Document.id).label('count')
         ).filter(
-            Document.doc_type.isnot(None)
+            Document.document_type.isnot(None)
         ).group_by(
-            Document.doc_type
+            Document.document_type
         ).order_by(desc('count')).all()
         
         chart_data = [{
-            'type': doc_type or 'Sem tipo',
+            'type': document_type or 'Sem tipo',
             'count': count
-        } for doc_type, count in results]
+        } for document_type, count in results]
         
         return jsonify({
             'success': True,

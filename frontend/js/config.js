@@ -42,7 +42,9 @@ export const ROUTES = {
         DELETE_MANY: '/documents/delete-many',
         BATCH_METADATA: '/documents/batch/metadata',
         BATCH_STATUS: '/documents/batch/status',
-        STATS: '/documents/stats'
+        STATS: '/documents/stats',
+        SIGN: '/documents/:id/sign',
+        SIGNATURE_STATUS: '/documents/signature/status'
     },
     ANALYTICS: {
         SUMMARY: '/analytics/dashboard/summary',

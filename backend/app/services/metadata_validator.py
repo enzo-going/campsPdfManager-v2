@@ -12,16 +12,14 @@ from datetime import datetime
 class MetadataValidator:
     """Validador de metadados seguindo padrões brasileiros"""
     
-    # Campos obrigatórios
-    REQUIRED_FIELDS = ['author', 'doc_type']
+    # Campos obrigatórios (FASE 1 already handles its own required fields)
+    REQUIRED_FIELDS = ['author']  # document_type is optional, validated elsewhere
     
-    # Tipos de documentos válidos
-    VALID_DOC_TYPES = [
-        'contrato', 'ata', 'relatorio', 'nota_fiscal',
-        'comprovante', 'certidao', 'procuracao', 'declaracao',
-        'estatuto', 'balanco', 'documento_fiscal',
-        'documento_trabalhista', 'documento_societario',
-        'laudo_tecnico', 'outro'
+    # Tipos de documentos sugeridos (não obrigatórios, apenas para referência)
+    SUGGESTED_DOC_TYPES = [
+        'Contrato', 'Ata', 'Relatório', 'Nota Fiscal',
+        'Comprovante', 'Certidão', 'Procuração', 'Declaração',
+        'Estatuto', 'Balanço', 'Laudo Técnico', 'Prontuário', 'Outro'
     ]
     
     # Limites de caracteres
@@ -69,12 +67,11 @@ class MetadataValidator:
             if not self._is_valid_person_name(author):
                 errors.append("Nome do autor inválido (use nome completo)")
         
-        # 4. Validar tipo de documento
-        if metadata.get('doc_type'):
-            if metadata['doc_type'] not in self.VALID_DOC_TYPES:
-                errors.append(
-                    f"Tipo de documento inválido. Tipos válidos: {', '.join(self.VALID_DOC_TYPES)}"
-                )
+        # 4. Validar tipo de documento (agora é campo livre, sem validação de lista)
+        # document_type é validado no FASE 1, aqui apenas verificamos tamanho
+        if metadata.get('document_type'):
+            if len(metadata['document_type']) > 100:
+                errors.append("Tipo de documento excede 100 caracteres")
         
         # 5. Validar assunto (se fornecido)
         if metadata.get('subject'):

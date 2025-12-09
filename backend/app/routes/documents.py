@@ -166,9 +166,6 @@ def upload_documents():
     author = request.form.get('author', '')
     subject = request.form.get('subject', '')
     
-    # DEBUG: Log received values
-    print(f"📤 Backend received: document_type='{document_type}', author='{author}', subject='{subject}'")
-    
     # ✅ FASE 1: Validar CPF/CNPJ
     is_valid_cpf, cpf_message = validate_cpf_cnpj(digitizer_cpf_cnpj)
     if not is_valid_cpf:
@@ -364,9 +361,7 @@ def list_documents():
             )
         )
     
-    doc_type = request.args.get('doc_type')
-    if doc_type:
-        query = query.filter(Document.doc_type == doc_type.lower())
+    # Legacy doc_type filter removed - use document_type instead
     
     # ✅ FASE 1: Filtro por document_type
     document_type = request.args.get('document_type')
@@ -450,8 +445,7 @@ def add_metadata(doc_id):
             document.subject = data['subject']
         if 'author' in data:
             document.author = data['author']
-        if 'doc_type' in data:
-            document.doc_type = data['doc_type'].lower() if data['doc_type'] else None
+        # Legacy doc_type update removed - use document_type instead
         
         # ✅ FASE 1: Processar novos campos obrigatórios
         if 'digitizer_name' in data:
@@ -545,10 +539,23 @@ def download_document(doc_id):
     db.session.add(audit)
     db.session.commit()
     
+    # Usar arquivo assinado se disponível, senão o original
+    if document.is_signed and document.signed_document_url:
+        file_path = document.signed_document_url
+        # Nome do arquivo baixado indica que está assinado
+        download_name = f"{os.path.splitext(document.original_filename)[0]}_assinado.pdf"
+    else:
+        file_path = document.file_path
+        download_name = document.original_filename
+    
+    # Resolver caminho absoluto (file_path é relativo ao backend/)
+    if not os.path.isabs(file_path):
+        file_path = os.path.join(current_app.root_path, '..', file_path)
+    
     return send_file(
-        document.file_path,
+        file_path,
         as_attachment=True,
-        download_name=document.original_filename
+        download_name=download_name
     )
 
 
@@ -703,9 +710,7 @@ def batch_add_metadata():
             'message': 'Metadados são obrigatórios'
         }), 400
     
-    # Normalizar doc_type
-    if 'doc_type' in metadata and metadata['doc_type']:
-        metadata['doc_type'] = metadata['doc_type'].lower()
+    # Legacy doc_type normalization removed - use document_type instead
     
     # ✅ FASE 1: Validar digitizer_cpf_cnpj (apenas se fornecido)
     if 'digitizer_cpf_cnpj' in metadata and metadata['digitizer_cpf_cnpj']:
@@ -803,3 +808,282 @@ def document_stats():
             'signing_rate': f"{(signed/total*100) if total > 0 else 0:.1f}%"
         }
     }), 200
+
+
+# ========================================
+# ✍️ ASSINATURA DIGITAL - FASE 2
+# ========================================
+
+@documents_bp.route('/<int:doc_id>/sign', methods=['POST'])
+@jwt_required()
+@user_required
+def sign_document(doc_id):
+    """
+    Assina um documento com certificado ICP-Brasil A1
+    
+    Requisitos Decreto 10.278/2020:
+    - Garantir autoria e integridade
+    - Usar certificado ICP-Brasil
+    - Registrar em log de auditoria
+    """
+    current_user_id = get_jwt_identity()
+    user_id_int = int(current_user_id)
+    
+    # Buscar documento
+    document = Document.query.get_or_404(doc_id)
+    
+    # Verificar se já está assinado
+    if document.is_signed:
+        return jsonify({
+            'success': False,
+            'message': 'Documento já está assinado'
+        }), 400
+    
+    try:
+        from app.services.signature_service import SignatureService
+        print("DEBUG: Imported SignatureService")
+        
+        # Configurar serviço de assinatura
+        cert_path = current_app.config.get('A1_CERT_PATH')
+        cert_password = current_app.config.get('A1_CERT_PASSWORD')
+        print(f"DEBUG: cert_path={cert_path}, has_password={bool(cert_password)}")
+        
+        if not cert_path or not cert_password:
+            return jsonify({
+                'success': False,
+                'message': 'Certificado A1 não configurado'
+            }), 500
+        
+        # Caminho completo do certificado
+        if not os.path.isabs(cert_path):
+            cert_path = os.path.join(current_app.root_path, '..', cert_path)
+        
+        print(f"DEBUG: Full cert_path={cert_path}, exists={os.path.exists(cert_path)}")
+        
+        signature_service = SignatureService(cert_path, cert_password)
+        print("DEBUG: SignatureService created successfully")
+        
+        # Verificar validade do certificado
+        is_valid, message = signature_service.is_valid()
+        print(f"DEBUG: Certificate is_valid={is_valid}, message={message}")
+        if not is_valid:
+            return jsonify({
+                'success': False,
+                'message': f'Certificado inválido: {message}'
+            }), 400
+        
+        # Obter dados do usuário
+        user_data = get_user_data(user_id_int)
+        print(f"DEBUG: user_data={user_data}")
+        
+        # Definir motivo e local (safely handle None request.json)
+        request_data = request.json or {}
+        reason = request_data.get('reason', 'Documento digitalizado conforme Decreto 10.278/2020')
+        location = request_data.get('location', current_app.config.get('DEFAULT_LOCATION', 'Santos, SP'))
+        print(f"DEBUG: reason={reason}, location={location}")
+        
+        # Caminho do PDF original
+        original_path = document.file_path
+        
+        # Resolver caminho absoluto (file_path é relativo ao backend/)
+        if not os.path.isabs(original_path):
+            original_path = os.path.join(current_app.root_path, '..', original_path)
+        
+        print(f"DEBUG: original_path={original_path}, exists={os.path.exists(original_path)}")
+        
+        # Verificar se o arquivo existe
+        if not os.path.exists(original_path):
+            return jsonify({
+                'success': False,
+                'message': f'Arquivo PDF não encontrado no disco. O arquivo pode ter sido movido ou deletado.'
+            }), 404
+        
+        # Definir caminho do PDF assinado
+        base_dir = os.path.dirname(original_path)
+        signed_dir = os.path.join(base_dir, 'signed')
+        print(f"DEBUG: base_dir={base_dir}, signed_dir={signed_dir}")
+        os.makedirs(signed_dir, exist_ok=True)
+        
+        signed_filename = f"{os.path.splitext(document.filename)[0]}_signed.pdf"
+        signed_path = os.path.join(signed_dir, signed_filename)
+        print(f"DEBUG: signed_filename={signed_filename}, signed_path={signed_path}")
+        
+        # 1. Primeiro: Embedar metadados no PDF original
+        print("DEBUG: Embedding metadata...")
+        metadata = {
+            'title': document.title or document.original_filename,
+            'author': document.author or '',
+            'subject': document.subject or '',
+            'keywords': document.document_type or '',
+            'digitizer_name': document.digitizer_name or '',
+            'digitizer_cpf_cnpj': document.digitizer_cpf_cnpj or '',
+            'resolution_dpi': document.resolution_dpi,
+            'document_type': document.document_type or '',
+            'location': location,
+        }
+        signature_service.embed_metadata(original_path, metadata)
+        print("DEBUG: Metadata embedded successfully")
+        
+        # 1.5: Adicionar página de assinatura (evita sobreposição de conteúdo)
+        print("DEBUG: Adding signature page...")
+        signature_service.add_signature_page(original_path)
+        print("DEBUG: Signature page added successfully")
+        
+        # 1.6: Adicionar rodapé CAMPS em todas as páginas (exceto última)
+        print("DEBUG: Adding CAMPS footer to pages...")
+        signature_service.add_footer_to_pages(original_path, exclude_last_page=True)
+        print("DEBUG: CAMPS footer added successfully")
+        
+        # 2. Segundo: Assinar o PDF (com selo visível)
+        print("DEBUG: About to sign PDF...")
+        signature_service.sign_pdf(
+            pdf_path=original_path,
+            output_path=signed_path,
+            reason=reason,
+            location=location
+        )
+        print("DEBUG: PDF signed successfully")
+        
+        # 3. Terceiro: Converter para PDF/A (conformidade Decreto 10.278/2020)
+        print("DEBUG: Converting to PDF/A...")
+        try:
+            pdfa_path = signature_service.convert_to_pdfa(
+                pdf_path=signed_path,
+                output_path=signed_path,  # Sobrescreve o PDF assinado com versão PDF/A
+                pdfa_version='3'  # PDF/A-3b
+            )
+            print(f"DEBUG: PDF/A conversion successful: {pdfa_path}")
+            
+            # 4. Re-embedar metadados após PDF/A (Ghostscript remove os metadados)
+            print("DEBUG: Re-embedding metadata after PDF/A...")
+            metadata_final = {
+                'title': document.title or document.original_filename,
+                'author': document.author or '',
+                'subject': document.subject or '',
+                'keywords': f"Assinado digitalmente, ICP-Brasil, {document.document_type or ''}",
+                'digitizer_name': document.digitizer_name or '',
+                'digitizer_cpf_cnpj': document.digitizer_cpf_cnpj or '',
+                'resolution_dpi': document.resolution_dpi,
+                'document_type': document.document_type or '',
+                'location': location,
+            }
+            signature_service.embed_metadata(signed_path, metadata_final)
+            print("DEBUG: Metadata re-embedded successfully")
+            
+        except Exception as e:
+            # Se conversão falhar, continua com PDF assinado (sem PDF/A)
+            print(f"DEBUG: PDF/A conversion failed (continuing without): {e}")
+        
+        # Calcular hash do documento final
+        new_hash = signature_service.get_pdf_hash(signed_path)
+        
+        # Obter informações do certificado
+        cert_info = signature_service.get_cert_info()
+        print(f"DEBUG: cert_info={cert_info}")
+        
+        # Atualizar documento
+        print("DEBUG: Updating document...")
+        document.is_signed = True
+        document.signed_at = datetime.now(BR_TZ)
+        document.signed_document_url = signed_path
+        print(f"DEBUG: Document updated, is_signed={document.is_signed}")
+        
+        # Registrar no audit log
+        print("DEBUG: Creating audit log...")
+        audit = AuditLog(
+            document_id=doc_id,
+            action='sign',
+            user_id=user_id_int,
+            description=f"Assinado digitalmente com certificado ICP-Brasil A1. "
+                       f"Certificado: {cert_info.get('common_name', 'N/A')}. "
+                       f"Motivo: {reason}",
+            ip_address=request.remote_addr
+        )
+        print("DEBUG: AuditLog created")
+        
+        db.session.add(audit)
+        print("DEBUG: Audit added to session, committing...")
+        db.session.commit()
+        print("DEBUG: Committed successfully!")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Documento assinado com sucesso',
+            'data': {
+                'signed_path': signed_path,
+                'signed_at': document.signed_at.isoformat(),
+                'certificate': {
+                    'name': cert_info.get('common_name'),
+                    'organization': cert_info.get('organization'),
+                    'valid_until': cert_info.get('valid_until')
+                },
+                'document_hash': new_hash
+            }
+        }), 200
+        
+    except FileNotFoundError as e:
+        return jsonify({
+            'success': False,
+            'message': f'Arquivo não encontrado: {str(e)}'
+        }), 404
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao assinar documento: {str(e)}'
+        }), 500
+
+
+@documents_bp.route('/signature/status', methods=['GET'])
+@jwt_required()
+def get_signature_status():
+    """
+    Retorna status do serviço de assinatura e informações do certificado
+    """
+    try:
+        from app.services.signature_service import SignatureService
+        
+        cert_path = current_app.config.get('A1_CERT_PATH')
+        cert_password = current_app.config.get('A1_CERT_PASSWORD')
+        
+        if not cert_path or not cert_password:
+            return jsonify({
+                'success': True,
+                'data': {
+                    'configured': False,
+                    'message': 'Certificado A1 não configurado'
+                }
+            }), 200
+        
+        # Caminho completo do certificado
+        if not os.path.isabs(cert_path):
+            cert_path = os.path.join(current_app.root_path, '..', cert_path)
+        
+        if not os.path.exists(cert_path):
+            return jsonify({
+                'success': True,
+                'data': {
+                    'configured': False,
+                    'message': f'Arquivo de certificado não encontrado: {cert_path}'
+                }
+            }), 200
+        
+        signature_service = SignatureService(cert_path, cert_password)
+        is_valid, message = signature_service.is_valid()
+        cert_info = signature_service.get_cert_info()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'configured': True,
+                'valid': is_valid,
+                'message': message,
+                'certificate': cert_info
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao verificar certificado: {str(e)}'
+        }), 500

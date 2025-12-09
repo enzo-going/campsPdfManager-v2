@@ -131,7 +131,7 @@ export class BatchModule {
                     // Basic Fields
                     if (doc.author) document.getElementById('batchAuthor').value = doc.author;
                     if (doc.subject) document.getElementById('batchSubject').value = doc.subject;
-                    if (doc.doc_type) document.getElementById('batchDocType').value = doc.doc_type;
+                    if (doc.document_type) document.getElementById('batchDocType').value = doc.document_type;
                     
                     // FASE 1 Fields
                     if (doc.digitizer_name) document.getElementById('batchDigitizerName').value = doc.digitizer_name;
@@ -163,7 +163,7 @@ export class BatchModule {
         const rawMetadata = {
             author: document.getElementById('batchAuthor')?.value,
             subject: document.getElementById('batchSubject')?.value,
-            doc_type: document.getElementById('batchDocType')?.value,
+            document_type: document.getElementById('batchDocType')?.value,
             digitizer_name: document.getElementById('batchDigitizerName')?.value,
             digitizer_cpf_cnpj: document.getElementById('batchDigitizerCpfCnpj')?.value,
             resolution_dpi: document.getElementById('batchResolution')?.value,

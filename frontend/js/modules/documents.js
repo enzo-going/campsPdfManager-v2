@@ -36,7 +36,7 @@ export class DocumentsModule {
             };
 
             if (search) params.search = search;
-            if (docType) params.doc_type = docType;
+            if (docType) params.document_type = docType;
             if (category) params.document_category = category;
 
             const response = await this.api.get(ROUTES.DOCUMENTS.LIST, params);
@@ -138,6 +138,11 @@ export class DocumentsModule {
                         <button class="btn-icon" onclick="window.app.modules.documents.downloadDocument(${doc.id})" title="Download">
                             📥
                         </button>
+                        ${!doc.is_signed ? `
+                            <button class="btn-icon btn-sign" onclick="window.app.modules.documents.signDocument(${doc.id})" title="Assinar Digitalmente">
+                                ✍️
+                            </button>
+                        ` : ''}
                         ${window.app.auth.hasPermission('delete') ? `
                             <button class="btn-icon btn-danger" onclick="window.app.modules.documents.deleteDocument(${doc.id})" title="Deletar">
                                 🗑️
@@ -252,7 +257,6 @@ export class DocumentsModule {
                 showToast('Documento não encontrado', 'error');
                 return;
             }
-            console.log('📄 Document data for details:', doc);
 
             // Populate modal
             document.getElementById('viewDocTitle').textContent = doc.title || doc.original_filename;
@@ -433,6 +437,46 @@ export class DocumentsModule {
         } catch (error) {
             console.error('Delete error:', error);
             showToast('Erro ao excluir documento', 'error');
+        }
+    }
+
+    /**
+     * Sign document with ICP-Brasil A1 certificate
+     */
+    async signDocument(docId) {
+        // Confirm before signing
+        const doc = this.documents.find(d => d.id === docId);
+        const docName = doc?.title || doc?.original_filename || `Documento #${docId}`;
+        
+        if (!confirm(`Deseja assinar digitalmente o documento "${docName}"?\n\nEsta ação não pode ser desfeita.`)) {
+            return;
+        }
+
+        try {
+            showToast('Assinando documento...', 'info');
+            
+            const url = ROUTES.DOCUMENTS.SIGN.replace(':id', docId);
+            const response = await this.api.post(url, {
+                reason: 'Documento digitalizado conforme Decreto 10.278/2020'
+            });
+
+            if (response.success) {
+                showToast('✍️ Documento assinado com sucesso!', 'success');
+                
+                // Show certificate info
+                if (response.data?.certificate) {
+                    const cert = response.data.certificate;
+                    console.log('📜 Certificado utilizado:', cert.name, cert.organization);
+                }
+                
+                // Reload the table to show updated status
+                this.load(this.currentPage);
+            } else {
+                showToast(response.message || 'Erro ao assinar documento', 'error');
+            }
+        } catch (error) {
+            console.error('Sign error:', error);
+            showToast('Erro ao assinar documento', 'error');
         }
     }
 }

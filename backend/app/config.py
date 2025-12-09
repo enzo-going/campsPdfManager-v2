@@ -49,6 +49,10 @@ class Config:
     DOCUSIGN_PRIVATE_KEY_PATH = os.getenv('DOCUSIGN_PRIVATE_KEY_PATH', 'certs/private.key')
     DOCUSIGN_BASE_URL = os.getenv('DOCUSIGN_BASE_URL', 'https://demo.docusign.net/restapi')
     
+    # ICP-Brasil A1 Certificate
+    A1_CERT_PATH = os.getenv('A1_CERT_PATH', 'certs/Certificado Camps 25-26.pfx')
+    A1_CERT_PASSWORD = os.getenv('A1_CERT_PASSWORD', '')
+    
     # Admin User
     ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@camps.com')
     ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')

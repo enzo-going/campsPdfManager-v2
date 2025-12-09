@@ -138,7 +138,7 @@ class BatchProcessor:
                     'title': document.title,
                     'author': document.author,
                     'subject': document.subject,
-                    'doc_type': document.doc_type
+                    'document_type': document.document_type
                 }
                 
                 # ✅ CORREÇÃO: Atualizar documento corretamente
@@ -151,9 +151,7 @@ class BatchProcessor:
                 if 'subject' in metadata and metadata['subject']:
                     document.subject = metadata['subject']
                 
-                if 'doc_type' in metadata and metadata['doc_type']:
-                    # ✅ Normalizar para minúsculo
-                    document.doc_type = metadata['doc_type'].lower()
+                # document_type is already handled below in FASE 1 section
                 
                 # ✅ FASE 1: Processar novos campos obrigatórios
                 if 'digitizer_name' in metadata:
@@ -190,7 +188,7 @@ class BatchProcessor:
                 # ✅ CORREÇÃO: Log de auditoria SEM metadata_changes
                 changes = []
                 # ✅ FASE 1: Listar todos os campos possíveis (sem keywords)
-                all_fields = ['title', 'author', 'subject', 'doc_type', 'digitizer_name', 
+                all_fields = ['title', 'author', 'subject', 'digitizer_name', 
                               'digitizer_cpf_cnpj', 'resolution_dpi', 'equipment_info',
                               'company_name', 'company_cnpj', 'document_type', 'document_category']
                 for key in all_fields:

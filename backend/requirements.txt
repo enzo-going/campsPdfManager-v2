@@ -48,3 +48,6 @@ typing_extensions==4.15.0
 urllib3==2.5.0
 Werkzeug==3.0.1
 wheel==0.45.1
+
+# FASE 2: Digital Signature with ICP-Brasil A1
+endesive==2.17.2

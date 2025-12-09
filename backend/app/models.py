@@ -130,7 +130,8 @@ class Document(db.Model):
     title = db.Column(db.String(255))
     author = db.Column(db.String(255))
     subject = db.Column(db.String(255))
-    doc_type = db.Column(db.String(50))
+    # ⚠️ DEPRECATED: Use document_type instead (FASE 1)
+    doc_type = db.Column(db.String(50))  # Legacy field, kept for backwards compatibility
     
     # ❌ REMOVIDO: keywords (não é obrigatório)
     # keywords = db.Column(db.String(500))  # REMOVIDO

@@ -764,6 +764,100 @@ def batch_add_metadata():
     }), 202
 
 
+@documents_bp.route('/batch/sign', methods=['POST'])
+@jwt_required()
+@user_required
+def batch_sign_documents():
+    """
+    Assina múltiplos documentos com certificado ICP-Brasil A1
+    
+    Similar ao batch_add_metadata, mas para assinatura digital
+    """
+    current_user_id = get_jwt_identity()
+    user_id_int = int(current_user_id)
+    data = request.get_json() or {}
+    document_ids = data.get('document_ids', [])
+    
+    # Validações
+    if not document_ids or not isinstance(document_ids, list):
+        return jsonify({
+            'success': False,
+            'message': 'Lista de IDs de documentos é obrigatória'
+        }), 400
+    
+    if len(document_ids) > 50:
+        return jsonify({
+            'success': False,
+            'message': 'Máximo de 50 documentos por lote'
+        }), 400
+    
+    # Verificar configuração do certificado
+    cert_path = current_app.config.get('A1_CERT_PATH')
+    cert_password = current_app.config.get('A1_CERT_PASSWORD')
+    
+    if not cert_path or not cert_password:
+        return jsonify({
+            'success': False,
+            'message': 'Certificado A1 não configurado no servidor'
+        }), 500
+    
+    # Caminho completo do certificado
+    if not os.path.isabs(cert_path):
+        cert_path = os.path.join(current_app.root_path, '..', cert_path)
+    
+    if not os.path.exists(cert_path):
+        return jsonify({
+            'success': False,
+            'message': 'Arquivo de certificado não encontrado'
+        }), 500
+    
+    # Verificar quais documentos podem ser assinados
+    documents = Document.query.filter(Document.id.in_(document_ids)).all()
+    
+    if len(documents) != len(document_ids):
+        return jsonify({
+            'success': False,
+            'message': 'Um ou mais documentos não foram encontrados'
+        }), 404
+    
+    # Filtrar documentos não assinados
+    unsigned_docs = [d for d in documents if not d.is_signed]
+    already_signed = len(documents) - len(unsigned_docs)
+    
+    if not unsigned_docs:
+        return jsonify({
+            'success': False,
+            'message': 'Todos os documentos selecionados já estão assinados'
+        }), 400
+    
+    # Gerar ID da tarefa
+    task_id = str(uuid.uuid4())
+    
+    # Parâmetros opcionais
+    reason = data.get('reason', 'Documento digitalizado conforme Decreto 10.278/2020')
+    location = data.get('location', current_app.config.get('DEFAULT_LOCATION', 'Santos, SP'))
+    
+    # Submeter para processamento
+    batch_processor.submit_signing_task(
+        task_id=task_id,
+        document_ids=[d.id for d in unsigned_docs],
+        user_id=user_id_int,
+        ip_address=request.remote_addr,
+        cert_path=cert_path,
+        cert_password=cert_password,
+        reason=reason,
+        location=location
+    )
+    
+    return jsonify({
+        'success': True,
+        'message': f'Assinatura iniciada para {len(unsigned_docs)} documentos',
+        'task_id': task_id,
+        'total_documents': len(unsigned_docs),
+        'already_signed': already_signed
+    }), 202
+
+
 @documents_bp.route('/batch/status/<task_id>', methods=['GET'])
 @jwt_required()
 def get_batch_status(task_id):
@@ -924,18 +1018,65 @@ def sign_document(doc_id):
         signature_service.embed_metadata(original_path, metadata)
         print("DEBUG: Metadata embedded successfully")
         
-        # 1.5: Adicionar página de assinatura (evita sobreposição de conteúdo)
+        # 2. Adicionar página de assinatura (evita sobreposição de conteúdo)
         print("DEBUG: Adding signature page...")
         signature_service.add_signature_page(original_path)
         print("DEBUG: Signature page added successfully")
         
-        # 1.6: Adicionar rodapé CAMPS em todas as páginas (exceto última)
+        # 3. Adicionar rodapé CAMPS em todas as páginas (exceto última)
         print("DEBUG: Adding CAMPS footer to pages...")
         signature_service.add_footer_to_pages(original_path, exclude_last_page=True)
         print("DEBUG: CAMPS footer added successfully")
         
-        # 2. Segundo: Assinar o PDF (com selo visível)
-        print("DEBUG: About to sign PDF...")
+        # 4. Converter para PDF/A ANTES de assinar (Decreto 10.278/2020)
+        # IMPORTANTE: Ghostscript invalida assinaturas, então deve ser feito antes
+        print("DEBUG: Converting to PDF/A BEFORE signing...")
+        metadata_final = {
+            'title': document.title or document.original_filename,
+            'author': document.author or '',
+            'subject': document.subject or '',
+            'keywords': f"Assinado digitalmente, ICP-Brasil, {document.document_type or ''}",
+            'digitizer_name': document.digitizer_name or '',
+            'digitizer_cpf_cnpj': document.digitizer_cpf_cnpj or '',
+            'resolution_dpi': document.resolution_dpi,
+            'document_type': document.document_type or '',
+            'location': location,
+        }
+        
+        try:
+            pdfa_temp = original_path + '.pdfa.tmp'
+            signature_service.convert_to_pdfa(
+                pdf_path=original_path,
+                output_path=pdfa_temp,
+                pdfa_version='1'  # PDF/A-1A
+            )
+            # Substituir original pelo PDF/A
+            import shutil
+            shutil.move(pdfa_temp, original_path)
+            print(f"DEBUG: PDF/A conversion successful, original replaced")
+            
+            # Re-embedar metadados após PDF/A (Ghostscript remove os metadados)
+            print("DEBUG: Re-embedding metadata after PDF/A...")
+            signature_service.embed_metadata(original_path, metadata_final)
+            print("DEBUG: Metadata re-embedded successfully")
+            
+            # Adicionar conformidade PDF/A completa (XMP, MarkInfo, OutputIntent)
+            # DEVE ser feito ANTES de assinar, não depois (assinatura seria invalidada)
+            print("DEBUG: Ensuring full PDF/A compliance BEFORE signing...")
+            signature_service.ensure_pdfa_compliance(original_path, metadata_final)
+            print("DEBUG: PDF/A compliance ensured")
+            
+        except Exception as e:
+            print(f"DEBUG: PDF/A conversion failed (continuing without): {e}")
+            import traceback
+            traceback.print_exc()
+            # Limpar arquivo temporário se existir
+            if os.path.exists(original_path + '.pdfa.tmp'):
+                os.remove(original_path + '.pdfa.tmp')
+        
+        # 5. ÚLTIMO PASSO: Assinar o PDF (com selo visível)
+        # A assinatura DEVE ser o último passo - nada pode modificar o PDF depois
+        print("DEBUG: About to sign PDF (FINAL STEP)...")
         signature_service.sign_pdf(
             pdf_path=original_path,
             output_path=signed_path,
@@ -943,36 +1084,6 @@ def sign_document(doc_id):
             location=location
         )
         print("DEBUG: PDF signed successfully")
-        
-        # 3. Terceiro: Converter para PDF/A (conformidade Decreto 10.278/2020)
-        print("DEBUG: Converting to PDF/A...")
-        try:
-            pdfa_path = signature_service.convert_to_pdfa(
-                pdf_path=signed_path,
-                output_path=signed_path,  # Sobrescreve o PDF assinado com versão PDF/A
-                pdfa_version='3'  # PDF/A-3b
-            )
-            print(f"DEBUG: PDF/A conversion successful: {pdfa_path}")
-            
-            # 4. Re-embedar metadados após PDF/A (Ghostscript remove os metadados)
-            print("DEBUG: Re-embedding metadata after PDF/A...")
-            metadata_final = {
-                'title': document.title or document.original_filename,
-                'author': document.author or '',
-                'subject': document.subject or '',
-                'keywords': f"Assinado digitalmente, ICP-Brasil, {document.document_type or ''}",
-                'digitizer_name': document.digitizer_name or '',
-                'digitizer_cpf_cnpj': document.digitizer_cpf_cnpj or '',
-                'resolution_dpi': document.resolution_dpi,
-                'document_type': document.document_type or '',
-                'location': location,
-            }
-            signature_service.embed_metadata(signed_path, metadata_final)
-            print("DEBUG: Metadata re-embedded successfully")
-            
-        except Exception as e:
-            # Se conversão falhar, continua com PDF assinado (sem PDF/A)
-            print(f"DEBUG: PDF/A conversion failed (continuing without): {e}")
         
         # Calcular hash do documento final
         new_hash = signature_service.get_pdf_hash(signed_path)

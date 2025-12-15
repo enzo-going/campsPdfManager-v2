@@ -51,6 +51,12 @@ export class BatchModule {
             metadataBtn.dataset.bound = 'true';
         }
 
+        const signBtn = document.getElementById('batchSignBtn');
+        if (signBtn && !signBtn.dataset.bound) {
+            signBtn.addEventListener('click', () => this.signSelected());
+            signBtn.dataset.bound = 'true';
+        }
+
         const deleteBtn = document.getElementById('batchDeleteBtn');
         if (deleteBtn && !deleteBtn.dataset.bound) {
             deleteBtn.addEventListener('click', () => this.deleteSelected());
@@ -298,6 +304,42 @@ export class BatchModule {
         } catch (error) {
             console.error('Batch delete error:', error);
             showToast('Erro ao excluir documentos', 'error');
+        }
+    }
+
+    /**
+     * Sign selected documents in batch
+     */
+    async signSelected() {
+        if (this.selectedDocuments.size === 0) return;
+
+        const count = this.selectedDocuments.size;
+        if (!confirm(`Deseja assinar digitalmente ${count} documento(s) com certificado ICP-Brasil A1?\n\nEsta ação é irreversível.`)) {
+            return;
+        }
+
+        showToast(`Iniciando assinatura de ${count} documento(s)...`, 'info');
+
+        try {
+            const response = await this.api.post(ROUTES.DOCUMENTS.BATCH_SIGN, {
+                document_ids: Array.from(this.selectedDocuments)
+            });
+
+            if (response.success) {
+                // Mostrar info sobre docs já assinados
+                if (response.already_signed > 0) {
+                    showToast(`${response.already_signed} documento(s) já estavam assinados e foram ignorados`, 'warning');
+                }
+                
+                // Iniciar polling do status
+                this.pollStatus(response.task_id);
+            } else {
+                showToast(response.message || 'Erro ao iniciar assinatura', 'error');
+            }
+
+        } catch (error) {
+            console.error('Batch sign error:', error);
+            showToast('Erro ao assinar documentos', 'error');
         }
     }
 }

@@ -70,7 +70,12 @@ class BatchProcessor:
                     
                     # ✅ Executar dentro do contexto Flask
                     with app.app_context():
-                        result = self._process_task(task)
+                        # Diferenciar tipo de tarefa
+                        task_type = task.get('task_type', 'metadata')
+                        if task_type == 'signing':
+                            result = self._process_signing_task(task)
+                        else:
+                            result = self._process_task(task)
                     
                     self._update_task_result(task_id, result)
                     self._update_task_status(task_id, 'completed')
@@ -285,6 +290,230 @@ class BatchProcessor:
             if task_id in self.active_tasks:
                 self.active_tasks[task_id]['result'] = result
 
+    # ========================================
+    # ✍️ ASSINATURA EM LOTE
+    # ========================================
+    
+    def submit_signing_task(self, task_id: str, document_ids: List[int],
+                            user_id: int, ip_address: str,
+                            cert_path: str, cert_password: str,
+                            reason: str = None, location: str = None) -> str:
+        """Adiciona tarefa de assinatura em lote à fila"""
+        from flask import current_app
+        if not self._workers_started:
+            self.ensure_workers_started(current_app._get_current_object())
+        
+        task = {
+            'task_id': task_id,
+            'task_type': 'signing',  # New: differentiate from metadata tasks
+            'document_ids': document_ids,
+            'user_id': user_id,
+            'ip_address': ip_address,
+            'cert_path': cert_path,
+            'cert_password': cert_password,
+            'reason': reason or 'Documento digitalizado conforme Decreto 10.278/2020',
+            'location': location or 'Santos, SP',
+            'total': len(document_ids),
+            'submitted_at': datetime.utcnow()
+        }
+        
+        with self._lock:
+            self.active_tasks[task_id] = {
+                'status': 'queued',
+                'submitted_at': task['submitted_at'],
+                'updated_at': None,
+                'result': None
+            }
+        
+        self.task_queue.put(task)
+        logger.info(f"✍️ Tarefa de assinatura {task_id} adicionada ({len(document_ids)} docs)")
+        print(f"✍️ Tarefa de assinatura {task_id} adicionada à fila ({len(document_ids)} documentos)")
+        
+        return task_id
+    
+    def _process_signing_task(self, task: Dict) -> Dict:
+        """Processa tarefa de assinatura em lote"""
+        import os
+        from app.services.signature_service import SignatureService
+        
+        document_ids = task['document_ids']
+        user_id = task['user_id']
+        ip_address = task['ip_address']
+        cert_path = task['cert_path']
+        cert_password = task['cert_password']
+        reason = task['reason']
+        location = task['location']
+        
+        results = []
+        
+        # Inicializar serviço de assinatura
+        try:
+            signature_service = SignatureService(cert_path, cert_password)
+            is_valid, message = signature_service.is_valid()
+            if not is_valid:
+                return {
+                    'total': len(document_ids),
+                    'success': 0,
+                    'failed': len(document_ids),
+                    'error': f'Certificado inválido: {message}',
+                    'results': []
+                }
+        except Exception as e:
+            return {
+                'total': len(document_ids),
+                'success': 0,
+                'failed': len(document_ids),
+                'error': f'Erro ao carregar certificado: {str(e)}',
+                'results': []
+            }
+        
+        for doc_id in document_ids:
+            try:
+                document = Document.query.get(doc_id)
+                
+                if not document:
+                    results.append({
+                        'document_id': doc_id,
+                        'success': False,
+                        'error': 'Documento não encontrado'
+                    })
+                    continue
+                
+                # Pular documentos já assinados
+                if document.is_signed:
+                    results.append({
+                        'document_id': doc_id,
+                        'document_title': document.title or document.original_filename,
+                        'success': False,
+                        'error': 'Documento já está assinado'
+                    })
+                    continue
+                
+                # Resolver caminho do arquivo
+                original_path = document.file_path
+                if not os.path.isabs(original_path):
+                    from flask import current_app
+                    original_path = os.path.join(current_app.root_path, '..', original_path)
+                
+                if not os.path.exists(original_path):
+                    results.append({
+                        'document_id': doc_id,
+                        'document_title': document.title or document.original_filename,
+                        'success': False,
+                        'error': 'Arquivo PDF não encontrado no disco'
+                    })
+                    continue
+                
+                # Definir caminho do PDF assinado
+                base_dir = os.path.dirname(original_path)
+                signed_dir = os.path.join(base_dir, 'signed')
+                os.makedirs(signed_dir, exist_ok=True)
+                
+                signed_filename = f"{os.path.splitext(document.filename)[0]}_signed.pdf"
+                signed_path = os.path.join(signed_dir, signed_filename)
+                
+                # 1. Embedar metadados
+                metadata = {
+                    'title': document.title or document.original_filename,
+                    'author': document.author or '',
+                    'subject': document.subject or '',
+                    'keywords': document.document_type or '',
+                    'digitizer_name': document.digitizer_name or '',
+                    'digitizer_cpf_cnpj': document.digitizer_cpf_cnpj or '',
+                    'resolution_dpi': document.resolution_dpi,
+                    'document_type': document.document_type or '',
+                    'location': location,
+                }
+                signature_service.embed_metadata(original_path, metadata)
+                
+                # 2. Adicionar página de assinatura
+                signature_service.add_signature_page(original_path)
+                
+                # 3. Adicionar rodapé CAMPS
+                signature_service.add_footer_to_pages(original_path, exclude_last_page=True)
+                
+                # 4. Converter para PDF/A ANTES de assinar (Ghostscript invalida assinaturas)
+                try:
+                    import shutil
+                    pdfa_temp = original_path + '.pdfa.tmp'
+                    signature_service.convert_to_pdfa(
+                        pdf_path=original_path,
+                        output_path=pdfa_temp,
+                        pdfa_version='1'  # PDF/A-1A
+                    )
+                    # Substituir original pelo PDF/A
+                    shutil.move(pdfa_temp, original_path)
+                    # Re-embedar metadados após PDF/A
+                    signature_service.embed_metadata(original_path, metadata)
+                    # Adicionar conformidade PDF/A completa ANTES de assinar
+                    signature_service.ensure_pdfa_compliance(original_path, metadata)
+                    print(f"  ✅ Doc {doc_id}: PDF/A conversion and compliance successful")
+                except Exception as e:
+                    print(f"  ⚠️ PDF/A conversion failed for doc {doc_id}: {e}")
+                    # Limpar temporário se existir
+                    if os.path.exists(original_path + '.pdfa.tmp'):
+                        os.remove(original_path + '.pdfa.tmp')
+                
+                # 5. ÚLTIMO PASSO: Assinar o PDF (nada pode modificá-lo depois)
+                signature_service.sign_pdf(
+                    pdf_path=original_path,
+                    output_path=signed_path,
+                    reason=reason,
+                    location=location
+                )
+                
+                # 6. Atualizar documento no banco
+                from pytz import timezone
+                BR_TZ = timezone('America/Sao_Paulo')
+                
+                document.is_signed = True
+                document.signed_at = datetime.now(BR_TZ)
+                document.signed_document_url = signed_path
+                
+                # 7. Audit log
+                cert_info = signature_service.get_cert_info()
+                audit = AuditLog(
+                    document_id=doc_id,
+                    user_id=user_id,
+                    action='batch_sign',
+                    description=f"Assinado em lote com certificado ICP-Brasil A1. "
+                               f"Certificado: {cert_info.get('common_name', 'N/A')}",
+                    ip_address=ip_address,
+                    user_agent=None
+                )
+                db.session.add(audit)
+                db.session.commit()
+                
+                results.append({
+                    'document_id': doc_id,
+                    'document_title': document.title or document.original_filename,
+                    'success': True
+                })
+                
+                logger.info(f"✅ Documento {doc_id} assinado")
+                print(f"  ✅ Documento {doc_id} assinado: {document.title}")
+                
+            except Exception as e:
+                logger.error(f"❌ Erro ao assinar documento {doc_id}: {str(e)}")
+                print(f"  ❌ Erro ao assinar documento {doc_id}: {str(e)}")
+                db.session.rollback()
+                
+                results.append({
+                    'document_id': doc_id,
+                    'success': False,
+                    'error': str(e)
+                })
+        
+        success_count = len([r for r in results if r.get('success')])
+        
+        return {
+            'total': len(document_ids),
+            'success': success_count,
+            'failed': len(document_ids) - success_count,
+            'results': results
+        }
+
 
 # ✅ Instância global
 batch_processor = BatchProcessor(max_workers=3)
+

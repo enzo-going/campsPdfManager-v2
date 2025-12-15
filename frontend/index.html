@@ -18,7 +18,7 @@
     <div id="loginModal" class="modal" style="display: none">
       <div class="modal-content login-modal">
         <div class="login-header">
-          <h1>🏢 CAMPS PDF Manager</h1>
+          <h1><span>CAMPS PDF Manager</span></h1>
           <p>Sistema de Gerenciamento de Documentos</p>
         </div>
         <form id="loginForm">
@@ -28,7 +28,6 @@
               type="email"
               id="loginEmail"
               required
-              placeholder="admin@camps.com"
             />
           </div>
           <div class="form-group">
@@ -37,7 +36,6 @@
               type="password"
               id="loginPassword"
               required
-              placeholder="admin123"
             />
           </div>
           <div id="loginError" class="error-message"></div>
@@ -206,6 +204,9 @@
             <div class="batch-buttons">
               <button class="btn-primary" id="batchMetadataBtn">
                 📝 Adicionar Metadados
+              </button>
+              <button class="btn-success" id="batchSignBtn">
+                ✍️ Assinar Selecionados
               </button>
               <button class="btn-danger" id="batchDeleteBtn">
                 🗑️ Deletar Selecionados

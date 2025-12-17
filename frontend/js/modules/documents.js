@@ -4,7 +4,7 @@
  */
 
 import { ROUTES, PAGINATION } from '../config.js';
-import { formatFileSize, formatDate } from '../utils/formatters.js';
+import { formatFileSize, formatDate, formatDateAbsolute, formatDateOnlyBR } from '../utils/formatters.js';
 import { showToast } from '../utils/toast.js';
 
 export class DocumentsModule {
@@ -249,131 +249,143 @@ export class DocumentsModule {
      */
     async viewDocument(docId) {
         try {
-            // Fetch fresh document data from API to ensure we have the latest
             const response = await this.api.get(`${ROUTES.DOCUMENTS.DETAIL}/${docId}`);
-            // Backend returns { success: true, data: { ...document fields } }
             const doc = response.data;
             if (!doc) {
                 showToast('Documento não encontrado', 'error');
                 return;
             }
 
-            // Populate modal
             document.getElementById('viewDocTitle').textContent = doc.title || doc.original_filename;
             
-            // Basic info
-            // Basic info
-            const detailsHtml = `
-                <div class="detail-group">
-                    <label>Arquivo</label>
-                    <span>${doc.original_filename}</span>
-                </div>
-                <div class="detail-group">
-                    <label>Tamanho</label>
-                    <span>${formatFileSize(doc.file_size)}</span>
-                </div>
-                <div class="detail-group">
-                    <label>Enviado em</label>
-                    <span>${formatDate(doc.uploaded_at)}</span>
-                </div>
-                <div class="detail-group">
-                    <label>Autor</label>
-                    <span>${doc.author || '-'}</span>
-                </div>
-                <div class="detail-group">
-                    <label>Assunto</label>
-                    <span>${doc.subject || '-'}</span>
-                </div>
-                <div class="detail-group">
-                    <label>Status</label>
-                    <span class="badge ${doc.is_signed ? 'badge-success' : 'badge-secondary'}">
-                        ${doc.is_signed ? '✓ Assinado' : '⋯ Pendente'}
-                    </span>
-                </div>
-            `;
-            document.getElementById('docDetailsContent').innerHTML = detailsHtml;
+            // Helper function to format destination
+            const formatDestination = (dest) => {
+                const map = {
+                    'guarda_permanente': '📁 Guarda Permanente',
+                    'eliminacao': '🗑️ Eliminação',
+                    'permanente': '📁 Guarda Permanente'
+                };
+                return map[dest] || dest || '-';
+            };
 
-            // FASE 1 Metadata
-            const fase1Html = `
-                <div class="modal-section-title">
-                    <span>📋</span> Metadados FASE 1
-                </div>
-                <div class="doc-fase1-grid">
-                    <div class="detail-group">
-                        <label>Digitalizador</label>
-                        <span>${doc.digitizer_name || '-'}</span>
+            // Helper function to capitalize first letter
+            const capitalize = (str) => {
+                if (!str) return '-';
+                return str.charAt(0).toUpperCase() + str.slice(1);
+            };
+
+            // Section 1: Identificação do Documento
+            const identificationHtml = `
+                <div class="modal-section">
+                    <div class="modal-section-title">
+                        <span>📋</span> Identificação do Documento
                     </div>
-                    <div class="detail-group">
-                        <label>CPF/CNPJ</label>
-                        <span>${doc.digitizer_cpf_cnpj || '-'}</span>
-                    </div>
-                    <div class="detail-group">
-                        <label>Resolução</label>
-                        <span>${doc.resolution_dpi ? doc.resolution_dpi + ' DPI' : '-'}</span>
-                    </div>
-                    <div class="detail-group">
-                        <label>Empresa</label>
-                        <span>${doc.company_name || '-'}</span>
-                    </div>
-                    <div class="detail-group">
-                        <label>Tipo Documental</label>
-                        <span>${doc.document_type || '-'}</span>
-                    </div>
-                </div>
-            `;
-            // Note: docFase1Content container already exists in HTML, so we just set innerHTML.
-            // But wait, I put doc-fase1-grid inside the HTML string above, but the container in index.html is id="docFase1Content" class="doc-fase1-grid".
-            // So I should NOT wrap it in another doc-fase1-grid div if the container already has that class.
-            // Let's check index.html again.
-            // <div id="docFase1Content" class="doc-fase1-grid"></div>
-            // So I should just inject the items.
-            // BUT, I want a title before the grid.
-            // So I should probably change the container in index.html or inject the title outside the grid?
-            // Actually, I can just inject the title and then the items? No, grid will mess up the title.
-            // I will remove the class from the container in index.html or handle it here.
-            // Easier to handle here: I'll inject the title into the parent or change how I inject.
-            // Actually, `docFase1Content` is the container. If it has `display: grid`, the title will be a grid item.
-            // I should probably remove the class `doc-fase1-grid` from `docFase1Content` in index.html and put the grid inside.
-            // OR, I can just make the title span all columns.
-            // Let's try to be safe and just update index.html to remove the class from the ID container, and put the class on an inner div.
-            
-            // Wait, I can't update index.html in this tool call easily without another step.
-            // Let's just update the JS to handle it.
-            // I will target `docFase1Content` which is currently `<div id="docFase1Content" class="doc-fase1-grid"></div>`.
-            // If I put a title in there, it becomes a grid item.
-            // I will use `document.getElementById('docFase1Content').className = '';` to remove the grid class from the container,
-            // and then inject the title and a new div with the grid class.
-            
-            document.getElementById('docFase1Content').className = ''; // Remove grid class from container
-            document.getElementById('docFase1Content').innerHTML = `
-                <div class="modal-section-title">
-                    <span>📋</span> Metadados FASE 1
-                </div>
-                <div class="doc-fase1-grid">
-                    <div class="detail-group">
-                        <label>Digitalizador</label>
-                        <span>${doc.digitizer_name || '-'}</span>
-                    </div>
-                    <div class="detail-group">
-                        <label>CPF/CNPJ</label>
-                        <span>${doc.digitizer_cpf_cnpj || '-'}</span>
-                    </div>
-                    <div class="detail-group">
-                        <label>Resolução</label>
-                        <span>${doc.resolution_dpi ? doc.resolution_dpi + ' DPI' : '-'}</span>
-                    </div>
-                    <div class="detail-group">
-                        <label>Empresa</label>
-                        <span>${doc.company_name || '-'}</span>
-                    </div>
-                    <div class="detail-group">
-                        <label>Tipo Documental</label>
-                        <span>${doc.document_type || '-'}</span>
+                    <div class="doc-details-grid">
+                        <div class="detail-group">
+                            <label>Título</label>
+                            <span>${doc.title || doc.original_filename}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Assunto</label>
+                            <span>${doc.subject || '-'}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Autor</label>
+                            <span>${doc.author || '-'}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Identificador (ID)</label>
+                            <span>#${doc.id}</span>
+                        </div>
+                        <div class="detail-group detail-group-full">
+                            <label>Hash SHA-256</label>
+                            <span class="hash-value">${doc.file_hash || '-'}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Status</label>
+                            <span class="badge ${doc.is_signed ? 'badge-success' : 'badge-secondary'}">
+                                ${doc.is_signed ? '✓ Assinado' : '⋯ Pendente'}
+                            </span>
+                        </div>
                     </div>
                 </div>
             `;
 
-            // Show modal
+            // Section 2: Dados da Digitalização
+            const digitizationHtml = `
+                <div class="modal-section">
+                    <div class="modal-section-title">
+                        <span>📷</span> Dados da Digitalização
+                    </div>
+                    <div class="doc-details-grid">
+                        <div class="detail-group">
+                            <label>Responsável pela Digitalização</label>
+                            <span>${doc.digitizer_name || '-'}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>CPF/CNPJ do Responsável</label>
+                            <span>${doc.digitizer_cpf_cnpj || '-'}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Data da Digitalização</label>
+                            <span>${formatDateAbsolute(doc.uploaded_at)}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Local da Digitalização</label>
+                            <span>${doc.digitization_location || '-'}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Resolução</label>
+                            <span>${doc.resolution_dpi ? doc.resolution_dpi + ' DPI' : '-'}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Empresa/Organização</label>
+                            <span>${doc.company_name || '-'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Section 3: Classificação e Gestão
+            const classificationHtml = `
+                <div class="modal-section">
+                    <div class="modal-section-title">
+                        <span>🏷️</span> Classificação e Gestão Documental
+                    </div>
+                    <div class="doc-details-grid">
+                        <div class="detail-group">
+                            <label>Tipo Documental</label>
+                            <span>${doc.document_type || '-'}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Classe/Categoria</label>
+                            <span>${doc.document_category || '-'}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Data de Produção (Original)</label>
+                            <span>${doc.production_date ? formatDateOnlyBR(doc.production_date) : '-'}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Destinação</label>
+                            <span>${formatDestination(doc.destination)}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Prazo de Guarda</label>
+                            <span>${capitalize(doc.retention_period)}</span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Tamanho do Arquivo</label>
+                            <span>${formatFileSize(doc.file_size)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Combine all sections
+            document.getElementById('docDetailsContent').innerHTML = identificationHtml + digitizationHtml + classificationHtml;
+            document.getElementById('docFase1Content').innerHTML = '';
+            document.getElementById('docFase1Content').className = '';
+
             document.getElementById('documentModal').style.display = 'flex';
 
         } catch (error) {

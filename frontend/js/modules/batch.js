@@ -3,7 +3,7 @@
  * Handles batch operations (metadata update, delete)
  */
 
-import { ROUTES } from '../config.js';
+import { ROUTES, API_BASE } from '../config.js';
 import { showToast } from '../utils/toast.js';
 
 export class BatchModule {
@@ -62,6 +62,12 @@ export class BatchModule {
             deleteBtn.addEventListener('click', () => this.deleteSelected());
             deleteBtn.dataset.bound = 'true';
         }
+
+        const downloadBtn = document.getElementById('batchDownloadBtn');
+        if (downloadBtn && !downloadBtn.dataset.bound) {
+            downloadBtn.addEventListener('click', () => this.downloadSelected());
+            downloadBtn.dataset.bound = 'true';
+        }
     }
 
     /**
@@ -116,6 +122,16 @@ export class BatchModule {
      */
     openMetadataModal() {
         if (this.selectedDocuments.size === 0) return;
+
+        // Check if any selected document is signed
+        const documents = window.app.modules.documents.documents || [];
+        const selectedDocs = documents.filter(d => this.selectedDocuments.has(d.id));
+        const signedDocs = selectedDocs.filter(d => d.is_signed);
+        
+        if (signedDocs.length > 0) {
+            showToast('⚠️ Documentos assinados não podem ter seus metadados alterados. A assinatura digital garante a integridade do documento.', 'warning');
+            return;
+        }
 
         const modal = document.getElementById('batchMetadataModal');
         const count = document.getElementById('batchDocCount');
@@ -313,7 +329,31 @@ export class BatchModule {
     async signSelected() {
         if (this.selectedDocuments.size === 0) return;
 
-        const count = this.selectedDocuments.size;
+        // Check if any selected document is already signed
+        const documents = window.app.modules.documents.documents || [];
+        const selectedDocs = documents.filter(d => this.selectedDocuments.has(d.id));
+        const signedDocs = selectedDocs.filter(d => d.is_signed);
+        
+        if (signedDocs.length > 0) {
+            if (signedDocs.length === this.selectedDocuments.size) {
+                // All selected documents are already signed
+                showToast('⚠️ Todos os documentos selecionados já estão assinados. Documentos assinados não podem ser assinados novamente.', 'warning');
+                return;
+            } else {
+                // Some are signed, some are not
+                const unsignedCount = this.selectedDocuments.size - signedDocs.length;
+                if (!confirm(`${signedDocs.length} documento(s) já está(ão) assinado(s) e será(ão) ignorado(s).\n\nDeseja continuar e assinar os ${unsignedCount} documento(s) pendente(s)?`)) {
+                    return;
+                }
+            }
+        }
+
+        const count = this.selectedDocuments.size - signedDocs.length;
+        if (count === 0) {
+            showToast('⚠️ Nenhum documento pendente de assinatura selecionado.', 'warning');
+            return;
+        }
+        
         if (!confirm(`Deseja assinar digitalmente ${count} documento(s) com certificado ICP-Brasil A1?\n\nEsta ação é irreversível.`)) {
             return;
         }
@@ -340,6 +380,72 @@ export class BatchModule {
         } catch (error) {
             console.error('Batch sign error:', error);
             showToast('Erro ao assinar documentos', 'error');
+        }
+    }
+
+    /**
+     * Download selected documents
+     */
+    async downloadSelected() {
+        if (this.selectedDocuments.size === 0) return;
+
+        const count = this.selectedDocuments.size;
+        showToast(`Iniciando download de ${count} documento(s)...`, 'info');
+
+        try {
+            const documentIds = Array.from(this.selectedDocuments);
+            
+            // Download each document
+            for (let i = 0; i < documentIds.length; i++) {
+                const docId = documentIds[i];
+                
+                try {
+                    // Get document info first
+                    const docInfo = await this.api.get(`${ROUTES.DOCUMENTS.DETAIL}/${docId}`);
+                    
+                    // Determine download URL
+                    const downloadUrl = `${ROUTES.DOCUMENTS.DETAIL}/${docId}/download`;
+                    
+                    // Create download link
+                    const response = await fetch(`${API_BASE}${downloadUrl}`, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        // Use title as filename, fallback to original_filename
+                        const baseTitle = docInfo.data?.title || docInfo.data?.original_filename || `documento_${docId}`;
+                        const filename = baseTitle.endsWith('.pdf') ? baseTitle : `${baseTitle}.pdf`;
+                        
+                        // Create download
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        
+                        // Small delay between downloads to avoid browser blocking
+                        if (i < documentIds.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                        }
+                    } else {
+                        console.error(`Failed to download document ${docId}`);
+                    }
+                } catch (err) {
+                    console.error(`Error downloading document ${docId}:`, err);
+                }
+            }
+            
+            showToast(`${count} documento(s) baixado(s) com sucesso!`, 'success');
+            
+        } catch (error) {
+            console.error('Batch download error:', error);
+            showToast('Erro ao baixar documentos', 'error');
         }
     }
 }

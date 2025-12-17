@@ -203,13 +203,16 @@
             </span>
             <div class="batch-buttons">
               <button class="btn-primary" id="batchMetadataBtn">
-                📝 Adicionar Metadados
+                📝 Metadados
+              </button>
+              <button class="btn-info" id="batchDownloadBtn">
+                📥 Baixar
               </button>
               <button class="btn-success" id="batchSignBtn">
-                ✍️ Assinar Selecionados
+                ✍️ Assinar
               </button>
               <button class="btn-danger" id="batchDeleteBtn">
-                🗑️ Deletar Selecionados
+                🗑️ Deletar
               </button>
               <button class="btn-secondary" onclick="clearSelection()">
                 ✖ Cancelar
@@ -289,41 +292,52 @@
 
             <!-- ✅ FASE 1: Formulário de Metadados Obrigatórios -->
             <div id="metadataForm" class="metadata-form" style="display: none;">
-              <h3>📋 Metadados FASE 1 - Decreto 10.278/2020</h3>
+              <h3>📋 Metadados - Decreto 10.278/2020</h3>
               <p class="form-description">
-                Campos obrigatórios para conformidade legal na digitalização de documentos.
+                Todos os campos são obrigatórios para conformidade legal.
               </p>
 
               <div class="form-grid">
-                <!-- Digitalizador -->
+                <!-- Identificação do Documento -->
                 <div class="form-group">
-                  <label for="digitizer_name">👤 Nome do Digitalizador *</label>
-                  <input
-                    type="text"
-                    id="digitizer_name"
-                    required
-                    placeholder="Ex: João Silva"
-                    maxlength="200"
-                  />
-                </div>
-
-                <!-- Basic Info (New Fields) -->
-                <div class="form-group">
-                  <label for="author">👤 Autor do Documento</label>
+                  <label for="author">👤 Autor do Documento *</label>
                   <input
                     type="text"
                     id="author"
+                    required
                     placeholder="Ex: Departamento Jurídico"
                     maxlength="200"
                   />
                 </div>
 
                 <div class="form-group">
-                  <label for="subject">📝 Assunto</label>
+                  <label for="subject">📝 Assunto *</label>
                   <input
                     type="text"
                     id="subject"
+                    required
                     placeholder="Ex: Contrato de Prestação de Serviços"
+                    maxlength="200"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="production_date">📅 Data de Produção (Original) *</label>
+                  <input
+                    type="date"
+                    id="production_date"
+                    required
+                  />
+                </div>
+
+                <!-- Digitalização -->
+                <div class="form-group">
+                  <label for="digitizer_name">👤 Responsável pela Digitalização *</label>
+                  <input
+                    type="text"
+                    id="digitizer_name"
+                    required
+                    placeholder="Ex: João Silva"
                     maxlength="200"
                   />
                 </div>
@@ -334,13 +348,23 @@
                     type="text"
                     id="digitizer_cpf_cnpj"
                     required
-                    placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                    placeholder="000.000.000-00"
                     maxlength="18"
                   />
                   <small>Apenas números (será formatado automaticamente)</small>
                 </div>
 
-                <!-- Digitalização -->
+                <div class="form-group">
+                  <label for="digitization_location">📍 Local da Digitalização *</label>
+                  <input
+                    type="text"
+                    id="digitization_location"
+                    required
+                    placeholder="Ex: CAMPS Santos - Sede"
+                    maxlength="200"
+                  />
+                </div>
+
                 <div class="form-group">
                   <label for="resolution_dpi">📐 Resolução (DPI) *</label>
                   <input
@@ -354,24 +378,24 @@
                   <small>Mínimo: 150 DPI (recomendado: 300 DPI)</small>
                 </div>
 
-
-
                 <!-- Organização -->
                 <div class="form-group">
-                  <label for="company_name">🏢 Nome da Empresa</label>
+                  <label for="company_name">🏢 Nome da Empresa *</label>
                   <input
                     type="text"
                     id="company_name"
+                    required
                     value="CAMPS Santos"
                     maxlength="200"
                   />
                 </div>
 
                 <div class="form-group">
-                  <label for="company_cnpj">🏛️ CNPJ da Empresa</label>
+                  <label for="company_cnpj">🏛️ CNPJ da Empresa *</label>
                   <input
                     type="text"
                     id="company_cnpj"
+                    required
                     placeholder="00.000.000/0001-00"
                     maxlength="18"
                   />
@@ -379,18 +403,19 @@
 
                 <!-- Classificação -->
                 <div class="form-group">
-                  <label for="upload_document_type">📂 Tipo de Documento</label>
+                  <label for="upload_document_type">📂 Tipo Documental *</label>
                   <input
                     type="text"
                     id="upload_document_type"
+                    required
                     placeholder="Ex: Contrato de Aprendizagem"
                     maxlength="100"
                   />
                 </div>
 
                 <div class="form-group">
-                  <label for="document_category">📑 Categoria</label>
-                  <select id="document_category">
+                  <label for="document_category">📑 Classe/Categoria *</label>
+                  <select id="document_category" required>
                     <option value="">Selecione...</option>
                     <option value="Administrativo">Administrativo</option>
                     <option value="Financeiro">Financeiro</option>
@@ -401,10 +426,32 @@
                     <option value="Médico">Médico</option>
                   </select>
                 </div>
+
+                <!-- Gestão Documental -->
+                <div class="form-group">
+                  <label for="destination">📁 Destinação *</label>
+                  <select id="destination" required>
+                    <option value="">Selecione...</option>
+                    <option value="guarda_permanente">Guarda Permanente</option>
+                    <option value="eliminacao">Eliminação após prazo</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="retention_period">⏱️ Prazo de Guarda *</label>
+                  <select id="retention_period" required>
+                    <option value="">Selecione...</option>
+                    <option value="5 anos">5 anos</option>
+                    <option value="10 anos">10 anos</option>
+                    <option value="20 anos">20 anos</option>
+                    <option value="30 anos">30 anos</option>
+                    <option value="permanente">Permanente</option>
+                  </select>
+                </div>
               </div>
 
               <div class="form-note">
-                <strong>* Campos obrigatórios</strong> conforme Decreto 10.278/2020
+                <strong>* Todos os campos são obrigatórios</strong> conforme Decreto 10.278/2020
               </div>
             </div>
 
@@ -615,9 +662,8 @@
           <button class="modal-close" onclick="closeDocumentModal()">✖</button>
         </div>
         <div class="modal-body">
-            <div id="docDetailsContent" class="doc-details-grid"></div>
-            <hr class="modal-divider">
-            <div id="docFase1Content" class="doc-fase1-grid"></div>
+            <div id="docDetailsContent" class="modal-sections-row"></div>
+            <div id="docFase1Content"></div>
         </div>
       </div>
     </div>

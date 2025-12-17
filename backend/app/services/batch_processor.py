@@ -369,9 +369,11 @@ class BatchProcessor:
         
         for doc_id in document_ids:
             try:
+                print(f"  📄 Processando documento {doc_id}...")
                 document = Document.query.get(doc_id)
                 
                 if not document:
+                    print(f"  ❌ Documento {doc_id} não encontrado no banco")
                     results.append({
                         'document_id': doc_id,
                         'success': False,
@@ -381,6 +383,7 @@ class BatchProcessor:
                 
                 # Pular documentos já assinados
                 if document.is_signed:
+                    print(f"  ⏭️ Documento {doc_id} já está assinado, pulando")
                     results.append({
                         'document_id': doc_id,
                         'document_title': document.title or document.original_filename,
@@ -391,11 +394,14 @@ class BatchProcessor:
                 
                 # Resolver caminho do arquivo
                 original_path = document.file_path
+                print(f"  📁 Caminho original: {original_path}")
                 if not os.path.isabs(original_path):
                     from flask import current_app
                     original_path = os.path.join(current_app.root_path, '..', original_path)
+                    print(f"  📁 Caminho resolvido: {original_path}")
                 
                 if not os.path.exists(original_path):
+                    print(f"  ❌ Arquivo não encontrado: {original_path}")
                     results.append({
                         'document_id': doc_id,
                         'document_title': document.title or document.original_filename,
@@ -403,6 +409,8 @@ class BatchProcessor:
                         'error': 'Arquivo PDF não encontrado no disco'
                     })
                     continue
+                
+                print(f"  ✓ Documento {doc_id} pronto para assinatura")
                 
                 # Definir caminho do PDF assinado
                 base_dir = os.path.dirname(original_path)

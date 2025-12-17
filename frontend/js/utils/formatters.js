@@ -46,6 +46,36 @@ export function formatDate(dateString) {
 }
 
 /**
+ * Format date to absolute Brazilian format (always shows full date with time)
+ */
+export function formatDateAbsolute(dateString) {
+    if (!dateString) return '-';
+    
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+/**
+ * Format date to Brazilian format (date only, no time)
+ */
+export function formatDateOnlyBR(dateString) {
+    if (!dateString) return '-';
+    
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
+
+/**
  * Format audit action to Portuguese
  */
 export function formatAuditAction(action) {

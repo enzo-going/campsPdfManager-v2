@@ -10,16 +10,23 @@ export class FASE1MetadataForm {
     constructor(formId = 'metadataForm') {
         this.formElement = document.getElementById(formId);
         this.fields = {
+            // Identificação
+            author: 'author',
+            subject: 'subject',
+            production_date: 'production_date',
+            // Digitalização
             digitizer_name: 'digitizer_name',
             digitizer_cpf_cnpj: 'digitizer_cpf_cnpj',
+            digitization_location: 'digitization_location',
             resolution_dpi: 'resolution_dpi',
-            equipment_info: 'equipment_info',
+            // Organização
             company_name: 'company_name',
             company_cnpj: 'company_cnpj',
+            // Classificação
             document_type: 'upload_document_type',
             document_category: 'document_category',
-            author: 'author',
-            subject: 'subject'
+            destination: 'destination',
+            retention_period: 'retention_period'
         };
         this.isLoaded = false;
     }

@@ -49,21 +49,73 @@ export function validateDPI(value) {
 export function validateFASE1Fields(data) {
     const errors = [];
     
-    // Digitizer Name
-    if (!data.digitizer_name || !data.digitizer_name.trim()) {
-        errors.push('Nome do digitalizador é obrigatório');
+    // Identificação do Documento
+    if (!data.author || !data.author.trim()) {
+        errors.push('Autor do documento é obrigatório');
     }
     
-    // CPF/CNPJ
-    const cpfValidation = validateCPF_CNPJ(data.digitizer_cpf_cnpj);
-    if (!cpfValidation.valid) {
-        errors.push(cpfValidation.message);
+    if (!data.subject || !data.subject.trim()) {
+        errors.push('Assunto é obrigatório');
+    }
+    
+    if (!data.production_date) {
+        errors.push('Data de produção é obrigatória');
+    }
+    
+    // Digitalização
+    if (!data.digitizer_name || !data.digitizer_name.trim()) {
+        errors.push('Responsável pela digitalização é obrigatório');
+    }
+    
+    // CPF/CNPJ - validate only once
+    if (!data.digitizer_cpf_cnpj) {
+        errors.push('CPF/CNPJ do digitalizador é obrigatório');
+    } else {
+        const cpfValidation = validateCPF_CNPJ(data.digitizer_cpf_cnpj);
+        if (!cpfValidation.valid) {
+            errors.push(cpfValidation.message);
+        }
+    }
+    
+    if (!data.digitization_location || !data.digitization_location.trim()) {
+        errors.push('Local da digitalização é obrigatório');
     }
     
     // DPI
     const dpiValidation = validateDPI(data.resolution_dpi);
     if (!dpiValidation.valid) {
         errors.push(dpiValidation.message);
+    }
+    
+    // Organização
+    if (!data.company_name || !data.company_name.trim()) {
+        errors.push('Nome da empresa é obrigatório');
+    }
+    
+    if (!data.company_cnpj) {
+        errors.push('CNPJ da empresa é obrigatório');
+    } else {
+        const cnpjValidation = validateCPF_CNPJ(data.company_cnpj);
+        if (!cnpjValidation.valid) {
+            errors.push('CNPJ da empresa: ' + cnpjValidation.message);
+        }
+    }
+    
+    // Classificação
+    if (!data.document_type || !data.document_type.trim()) {
+        errors.push('Tipo documental é obrigatório');
+    }
+    
+    if (!data.document_category) {
+        errors.push('Classe/Categoria é obrigatória');
+    }
+    
+    if (!data.destination) {
+        errors.push('Destinação é obrigatória');
+    }
+    
+    if (!data.retention_period) {
+        errors.push('Prazo de guarda é obrigatório');
     }
     
     return {

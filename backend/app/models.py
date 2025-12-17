@@ -145,6 +145,22 @@ class Document(db.Model):
     document_category = db.Column(db.String(100))  # Ex: "Trabalhista"
     
     # ==========================================
+    # METADADOS DECRETO 10.278/2020 (Adicionais)
+    # ==========================================
+    
+    # ✅ NOVO: Data de produção do documento original
+    production_date = db.Column(db.Date)
+    
+    # ✅ NOVO: Local da digitalização
+    digitization_location = db.Column(db.String(200))  # Ex: "CAMPS Santos - Sede"
+    
+    # ✅ NOVO: Destinação (guarda permanente ou eliminação)
+    destination = db.Column(db.String(50))  # "guarda_permanente", "eliminacao"
+    
+    # ✅ NOVO: Prazo de guarda
+    retention_period = db.Column(db.String(100))  # Ex: "5 anos", "10 anos", "permanente"
+    
+    # ==========================================
     # ASSINATURA DIGITAL (DocuSign - FASE 2)
     # ==========================================
     is_signed = db.Column(db.Boolean, default=False)
@@ -214,6 +230,12 @@ class Document(db.Model):
             # ✅ NOVOS: Tipo e categoria
             'document_type': self.document_type,
             'document_category': self.document_category,
+            
+            # ✅ NOVOS: Metadados Decreto 10.278/2020
+            'production_date': self.production_date.isoformat() if self.production_date else None,
+            'digitization_location': self.digitization_location,
+            'destination': self.destination,
+            'retention_period': self.retention_period,
             
             # Assinatura
             'is_signed': self.is_signed,

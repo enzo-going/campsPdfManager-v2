@@ -166,6 +166,19 @@ def upload_documents():
     author = request.form.get('author', '')
     subject = request.form.get('subject', '')
     
+    # ✅ NOVOS: Campos Decreto 10.278/2020
+    production_date_str = request.form.get('production_date', '')
+    production_date = None
+    if production_date_str:
+        try:
+            production_date = datetime.strptime(production_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    
+    digitization_location = request.form.get('digitization_location', '')
+    destination = request.form.get('destination', '')
+    retention_period = request.form.get('retention_period', '')
+    
     # ✅ FASE 1: Validar CPF/CNPJ
     is_valid_cpf, cpf_message = validate_cpf_cnpj(digitizer_cpf_cnpj)
     if not is_valid_cpf:
@@ -283,12 +296,16 @@ def upload_documents():
                 # ✅ FASE 1: Organização
                 company_name=company_name,
                 company_cnpj=company_cnpj,
-                # ✅ FASE 1: Classificação
                 document_type=document_type,
                 document_category=document_category,
                 # ✅ FASE 1: Metadados descritivos
                 author=author,
-                subject=subject
+                subject=subject,
+                # ✅ NOVOS: Campos Decreto 10.278/2020
+                production_date=production_date,
+                digitization_location=digitization_location,
+                destination=destination,
+                retention_period=retention_period
             )
             
             db.session.add(document)
@@ -542,11 +559,16 @@ def download_document(doc_id):
     # Usar arquivo assinado se disponível, senão o original
     if document.is_signed and document.signed_document_url:
         file_path = document.signed_document_url
-        # Nome do arquivo baixado indica que está assinado
-        download_name = f"{os.path.splitext(document.original_filename)[0]}_assinado.pdf"
     else:
         file_path = document.file_path
-        download_name = document.original_filename
+    
+    # Nome do arquivo: usar título se disponível, senão original_filename
+    base_name = document.title or document.original_filename or f"documento_{doc_id}"
+    # Garantir extensão .pdf
+    if not base_name.lower().endswith('.pdf'):
+        download_name = f"{base_name}.pdf"
+    else:
+        download_name = base_name
     
     # Resolver caminho absoluto (file_path é relativo ao backend/)
     if not os.path.isabs(file_path):

@@ -1,7 +1,13 @@
-# 📄 CAMPS PDF Manager v2.0
+# CAMPS PDF Manager v2
 
-> Sistema profissional de gestão, validação e assinatura digital de documentos PDF, em conformidade com o **Decreto nº 10.278/2020** (FASE 1).
+Sistema web para gestão, validação e digitalização de documentos PDF com uso de metadados.
 
+## 👨‍💻 Minha participação
+Participei da continuidade e desenvolvimento deste projeto durante minha atuação em ambiente de estágio, contribuindo com o entendimento da arquitetura do sistema, organização da solução e acompanhamento da evolução do projeto.
+
+Esta versão no meu GitHub representa minha documentação pessoal e estudo prático da aplicação.
+
+---
 ![Status](https://img.shields.io/badge/Status-Active-success)
 ![Version](https://img.shields.io/badge/Version-2.0.0-blue)
 ![Compliance](https://img.shields.io/badge/Compliance-Decreto%2010.278-green)

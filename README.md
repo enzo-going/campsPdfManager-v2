@@ -3,7 +3,11 @@
 Sistema web para gestão, validação e digitalização de documentos PDF com uso de metadados.
 
 ## 👨‍💻 Minha participação
-Participei da continuidade e desenvolvimento deste projeto durante minha atuação em ambiente de estágio, contribuindo com o entendimento da arquitetura do sistema, organização da solução e acompanhamento da evolução do projeto.
+
+Atuei na continuidade deste projeto durante meu estágio no CAMPS Santos:
+
+- **Documentação da API REST** (`docs/API.md`): mapeei todos os endpoints dos três blueprints (auth, documents, analytics), documentando métodos HTTP, parâmetros, formatos de request/response e códigos de erro.
+- **Correção de segurança no `.env.example`**: identifiquei e removi credenciais reais expostas publicamente no repositório, substituindo por placeholders documentados.
 
 Esta versão no meu GitHub representa minha documentação pessoal e estudo prático da aplicação.
 

@@ -68,12 +68,17 @@ export function showToast(message, type = 'info', duration = null) {
         pointer-events: auto;
         text-align: center;
     `;
-    // Format message: one sentence per line (split by . followed by space)
-    const formattedMessage = message
-        .replace(/\.\s+/g, '.<br>')
-        .replace(/!\s+/g, '!<br>')
-        .replace(/\?\s+/g, '?<br>');
-    toast.innerHTML = formattedMessage;
+    // Keep sentence/newline formatting without interpreting API messages as HTML.
+    const messageLines = String(message)
+        .replace(/([.!?])\s+/g, '$1\n')
+        .split(/\r?\n/);
+
+    messageLines.forEach((line, index) => {
+        if (index > 0) {
+            toast.appendChild(document.createElement('br'));
+        }
+        toast.appendChild(document.createTextNode(line));
+    });
     
     // Click to dismiss
     toast.addEventListener('click', () => {
